@@ -1,0 +1,16 @@
+{
+  "app_title": "JadwalAI",
+  "login": "Login",
+  "new_schedule": "New Schedule",
+  "step_1": "Settings",
+  "step_2": "Upload",
+  "step_3": "Results",
+  "settings_desc": "Configure school settings (Middle/High school, labs) to optimize the FET algorithm.",
+  "btn_next_upload": "Next: Upload Data",
+  "drag_drop": "Drag and drop your smart Excel file here",
+  "click_to_browse": "Or click to browse files",
+  "btn_back_settings": "Back to Settings",
+  "btn_next_generate": "Next: Generate",
+  "generating": "Checking constraints and generating schedule via AI...",
+  "btn_cancel": "Cancel and Restart"
+}

@@ -1,10 +1,15 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
+import React from 'react'
+import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
+import './index.css'
+import './i18n' // استدعاء إعدادات اللغات
 
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
+// ضبط اتجاه الصفحة الافتراضي للعربية
+document.documentElement.dir = 'rtl';
+document.documentElement.lang = 'ar';
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
     <App />
-  </StrictMode>,
+  </React.StrictMode>,
 )

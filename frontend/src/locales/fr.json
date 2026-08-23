@@ -1,0 +1,16 @@
+{
+  "app_title": "JadwalAI",
+  "login": "Connexion",
+  "new_schedule": "Nouvel Emploi",
+  "step_1": "Paramètres",
+  "step_2": "Importation",
+  "step_3": "Résultats",
+  "settings_desc": "Configurez les paramètres de votre établissement (collège/lycée, laboratoires) pour optimiser l'algorithme FET.",
+  "btn_next_upload": "Suivant : Importation",
+  "drag_drop": "Glissez et déposez votre fichier Excel intelligent ici",
+  "click_to_browse": "Ou cliquez pour parcourir",
+  "btn_back_settings": "Retour aux paramètres",
+  "btn_next_generate": "Suivant : Générer",
+  "generating": "Vérification des contraintes et génération via l'IA en cours...",
+  "btn_cancel": "Annuler et recommencer"
+}
