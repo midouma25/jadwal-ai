@@ -4,70 +4,68 @@ const multer = require('multer');
 const axios = require('axios');
 const path = require('path');
 const fs = require('fs');
+const FormData = require('form-data'); // المكتبة الجديدة
 
 const app = express();
-// سنستخدم المنفذ 5000 لكي لا يتعارض مع خادم Python الذي يعمل على 8000
 const PORT = 5000; 
 
-// إعدادات الـ Middleware
 app.use(cors());
 app.use(express.json());
 
-// إنشاء مجلد مؤقت لحفظ ملفات الإكسيل المرفوعة
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir);
 }
 
-// إعداد مكتبة Multer لمعالجة الملفات
 const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, uploadDir)
-    },
-    filename: function (req, file, cb) {
-        // إضافة طابع زمني لمنع تداخل أسماء الملفات
-        cb(null, Date.now() + '-' + file.originalname)
-    }
+    destination: function (req, file, cb) { cb(null, uploadDir) },
+    filename: function (req, file, cb) { cb(null, Date.now() + '-' + file.originalname) }
 });
 const upload = multer({ storage: storage });
 
-// 1. نقطة فحص خادم Node.js
-app.get('/', (req, res) => {
-    res.json({ message: "بوابة Node.js (API Gateway) تعمل بنجاح!" });
-});
+app.get('/', (req, res) => res.json({ message: "بوابة Node.js تعمل!" }));
 
-// 2. نقطة لاختبار الاتصال بخادم Python
-app.get('/api/check-python', async (req, res) => {
-    try {
-        // نحاول الاتصال بالخادم الذي تركناه يعمل في النافذة الأخرى
-        const response = await axios.get('http://127.0.0.1:8000/');
-        res.json({ 
-            message: "تم الاتصال بخادم Python بنجاح! 🤝", 
-            python_response: response.data 
-        });
-    } catch (error) {
-        res.status(500).json({ error: "فشل الاتصال بخادم Python. تأكد من تشغيله." });
-    }
-});
-
-// 3. نقطة استقبال ملف الإكسيل من React
+// ...
 app.post('/api/upload-excel', upload.single('file'), async (req, res) => {
     try {
-        if (!req.file) {
-            return res.status(400).json({ error: "الرجاء رفع ملف إكسيل." });
-        }
+        if (!req.file) return res.status(400).json({ error: "الرجاء رفع ملف إكسيل." });
         
-        console.log("تم استلام الملف:", req.file.filename);
+        // ⚠️ قراءة اللغة من الرابط
+        const lang = req.query.lang || 'ar';
         
-        // لاحقاً هنا سنرسل الملف إلى Python، لكن الآن نؤكد الاستلام فقط
-        res.json({ 
-            message: "تم استلام ملف الإكسيل بنجاح!", 
-            filename: req.file.filename 
+        const formData = new FormData();
+        formData.append('file', fs.createReadStream(req.file.path), req.file.originalname);
+        
+        // ⚠️ تمرير اللغة إلى بايثون عبر الرابط لضمان وصولها 100%
+        const pythonResponse = await axios.post(`http://127.0.0.1:8000/parse-excel/?lang=${lang}`, formData, {
+            headers: { ...formData.getHeaders() }
         });
+        
+        fs.unlinkSync(req.file.path);
+        
+        res.json({ message: "تمت معالجة الملف بنجاح!", python_analysis: pythonResponse.data });
+        
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error("خطأ:", error.message);
+        res.status(500).json({ error: "حدث خطأ أثناء معالجة الملف", details: error.message });
     }
 });
+// ...
+
+
+// أضف هذا الكود قبل app.listen
+app.get('/api/regenerate-pdf/:job_id', async (req, res) => {
+    try {
+        const lang = req.query.lang || 'ar';
+        const jobId = req.params.job_id;
+        
+        const pythonResponse = await axios.get(`http://127.0.0.1:8000/regenerate-pdf/${jobId}?lang=${lang}`);
+        res.json(pythonResponse.data);
+    } catch (error) {
+        res.status(500).json({ error: "فشل تحديث الجدول", details: error.message });
+    }
+});
+
 
 app.listen(PORT, () => {
     console.log(`Node.js Server is running on http://localhost:${PORT}`);
