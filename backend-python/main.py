@@ -21,16 +21,19 @@ app = FastAPI(title="JadwalAI Engine", version="1.0")
 def read_root():
     return {"status": "online"}
 
+# أضفنا has_it و has_art لاستقبالها من React
 @app.post("/parse-excel/")
-async def parse_excel(lang: str = "ar", file: UploadFile = File(...)):
+async def parse_excel(lang: str = "ar", has_it: str = "true", has_art: str = "true", file: UploadFile = File(...)):
     try:
         contents = await file.read()
         df_classes = pd.read_excel(io.BytesIO(contents), sheet_name='الأقسام')
         df_teachers = pd.read_excel(io.BytesIO(contents), sheet_name='الأساتذة')
         df_assignments = pd.read_excel(io.BytesIO(contents), sheet_name='الإسناد')
         
-        builder = FETXMLBuilder(df_classes, df_teachers, df_assignments)
+        # نمرر المفاتيح هنا
+        builder = FETXMLBuilder(df_classes, df_teachers, df_assignments, has_it=has_it, has_art=has_art)
         fet_xml_content = builder.build()
+        # ... باقي الدالة كما هي
         
         job_id = f"job_{os.urandom(4).hex()}"
         job_dir = TEMP_DIR / job_id
@@ -40,8 +43,9 @@ async def parse_excel(lang: str = "ar", file: UploadFile = File(...)):
         with open(input_file, "w", encoding="utf-8") as f:
             f.write(fet_xml_content)
             
-        command = [str(FET_PATH), f"--inputfile={str(input_file)}", f"--outputdir={str(job_dir)}", "--warn=false"]
-        process = subprocess.run(command, capture_output=True, text=True, timeout=60)
+        # 🔴 الإصلاح هنا: حذفنا --warn=false المرفوضة
+        command = [str(FET_PATH), f"--inputfile={str(input_file)}", f"--outputdir={str(job_dir)}"]
+        process = subprocess.run(command, capture_output=True, text=True, timeout=120)
         
         if process.returncode != 0:
             return {"status": "error", "message": "فشل FET", "details": process.stderr or process.stdout}
@@ -51,9 +55,10 @@ async def parse_excel(lang: str = "ar", file: UploadFile = File(...)):
         teachers_schedules, classes_schedules = parser.get_all_schedules()
         
         pdf_engine = PDFGenerator(str(job_dir), lang)
-        teachers_file, classes_file = pdf_engine.generate_all_pdfs(teachers_schedules, classes_schedules)
+        teachers_file, classes_file, merged_classes = pdf_engine.generate_all_pdfs(teachers_schedules, classes_schedules)
         
-        base_url = f"http://127.0.0.1:8000/download/{job_id}"
+# 🔴 توجيه الروابط نحو بوابة Node.js الآمنة
+        base_url = f"http://localhost:5000/api/download/{job_id}"
             
         return {
             "status": "success",
@@ -63,13 +68,14 @@ async def parse_excel(lang: str = "ar", file: UploadFile = File(...)):
                 "teachers": f"{base_url}/{teachers_file}",
                 "classes": f"{base_url}/{classes_file}"
             },
-            # الإضافة الجديدة السحرية: إرسال البيانات الخام للواجهة
             "schedule_data": {
                 "teachers": teachers_schedules,
-                "classes": classes_schedules
+                "classes": classes_schedules  
             }
         }
-        
+    except ValueError as ve:
+        # التقاط الخطأ البيداغوجي (مثل أستاذ جديد يدرس 4 متوسط) وإرساله كخطأ 400
+        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         import traceback
         print(traceback.format_exc())
@@ -93,14 +99,21 @@ def regenerate_pdf(job_id: str, lang: str = "ar"):
         teachers_schedules, classes_schedules = parser.get_all_schedules()
         
         pdf_engine = PDFGenerator(str(job_dir), lang)
-        teachers_file, classes_file = pdf_engine.generate_all_pdfs(teachers_schedules, classes_schedules)
+        teachers_file, classes_file, merged_classes = pdf_engine.generate_all_pdfs(teachers_schedules, classes_schedules)
         
         base_url = f"http://127.0.0.1:8000/download/{job_id}"
+            
         return {
-            "status": "success", 
+            "status": "success",
+            "message": "تم توليد الجداول بنجاح!",
+            "job_id": job_id,
             "pdf_urls": {
                 "teachers": f"{base_url}/{teachers_file}",
                 "classes": f"{base_url}/{classes_file}"
+            },
+            "schedule_data": {
+                "teachers": teachers_schedules,
+                "classes": merged_classes  # 🔴 نرسل الجداول المدمجة لكي تظهر أنيقة في الموقع!
             }
         }
     except Exception as e:

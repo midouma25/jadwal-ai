@@ -30,24 +30,30 @@ app.post('/api/upload-excel', upload.single('file'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: "الرجاء رفع ملف إكسيل." });
         
-        // ⚠️ قراءة اللغة من الرابط
         const lang = req.query.lang || 'ar';
+        const hasIt = req.query.has_it || 'true';
+        const hasArt = req.query.has_art || 'true';
         
         const formData = new FormData();
         formData.append('file', fs.createReadStream(req.file.path), req.file.originalname);
         
-        // ⚠️ تمرير اللغة إلى بايثون عبر الرابط لضمان وصولها 100%
-        const pythonResponse = await axios.post(`http://127.0.0.1:8000/parse-excel/?lang=${lang}`, formData, {
+        // تمريرها إلى بايثون
+        const pythonResponse = await axios.post(`http://127.0.0.1:8000/parse-excel/?lang=${lang}&has_it=${hasIt}&has_art=${hasArt}`, formData, {
             headers: { ...formData.getHeaders() }
         });
         
         fs.unlinkSync(req.file.path);
-        
-        res.json({ message: "تمت معالجة الملف بنجاح!", python_analysis: pythonResponse.data });
-        
+        res.json(pythonResponse.data);
+
     } catch (error) {
-        console.error("خطأ:", error.message);
-        res.status(500).json({ error: "حدث خطأ أثناء معالجة الملف", details: error.message });
+        if (req.file) fs.unlinkSync(req.file.path);
+        
+        // 🔴 استخراج رسالة بايثون الحقيقية وإرسالها لـ React
+        const statusCode = error.response?.status || 500;
+        const errorMessage = error.response?.data?.detail || "حدث خطأ داخلي في الخادم.";
+        
+        console.error('Python Error:', errorMessage);
+        res.status(statusCode).json({ detail: errorMessage });
     }
 });
 // ...
@@ -66,7 +72,24 @@ app.get('/api/regenerate-pdf/:job_id', async (req, res) => {
     }
 });
 
-
+// 🔴 جسر التحميل الآمن (يحل مشكلة حماية المتصفح CORS)
+app.get('/api/download/:job_id/:filename', async (req, res) => {
+    try {
+        const { job_id, filename } = req.params;
+        const response = await axios.get(`http://127.0.0.1:8000/download/${job_id}/${filename}`, {
+            responseType: 'stream'
+        });
+        
+        // إجبار المتصفح على تحميل الملف كـ PDF
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+        res.setHeader('Content-Type', 'application/pdf');
+        
+        response.data.pipe(res);
+    } catch (error) {
+        console.error("Download Error:", error.message);
+        res.status(404).send("الملف غير موجود أو انتهت صلاحيته");
+    }
+});
 app.listen(PORT, () => {
     console.log(`Node.js Server is running on http://localhost:${PORT}`);
 });

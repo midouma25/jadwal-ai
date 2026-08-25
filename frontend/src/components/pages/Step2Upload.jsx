@@ -22,26 +22,44 @@ export default function Step2Upload({ onBack, onNext }) {
 
     const currentLang = i18n.language.split('-')[0];
 
-    try {
-      const response = await axios.post(`http://localhost:5000/api/upload-excel?lang=${currentLang}`, formData, {
+try {
+      // 1. إرسال الملف إلى الخادم
+      const response = await axios.post(`http://localhost:5000/api/upload-excel?lang=ar&has_it=false&has_art=false`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      setUploadStatus('success');
+      // 2. استخراج البيانات بنجاح
+      const resultData = response.data.python_analysis || response.data;
 
-      // 🔴 التحديث المهم: استخراج البيانات بالمسار الصحيح تماماً
-      const pdfUrls = response.data.python_analysis?.pdf_urls;
-      const jobId = response.data.python_analysis?.job_id;
-      const scheduleData = response.data.python_analysis?.schedule_data;
+      if (resultData && resultData.status === 'success') {
+        
+        // 3. إيقاف عجلة التحميل
+        setUploadStatus('success'); 
 
-      setTimeout(() => {
-        onNext(pdfUrls, jobId, scheduleData);
-      }, 1000);
+        // 4. الانتقال الذكي للخطوة 3 (التوليد والنتائج)
+        // يبحث الكود عن الدالة المتاحة في مشروعك ويقوم بتشغيلها
+        if (typeof onNext === 'function') {
+            onNext(resultData);
+        } else if (typeof setStep === 'function') {
+            if (typeof setScheduleData === 'function') {
+                setScheduleData(resultData); // حفظ روابط الـ PDF
+            }
+            setStep(3); // الانتقال للخطوة الثالثة
+        } else {
+            // في حال كان اسم الدالة مختلفاً تماماً في مشروعك
+            alert("✅ تم توليد الجداول بنجاح! يرجى المتابعة للخطوة الثالثة لرؤية النتائج.");
+        }
+
+      } else {
+        setUploadStatus('error');
+        alert("حدث خطأ في قراءة الاستجابة من الخادم.");
+      }
 
     } catch (error) {
       console.error('Upload error:', error);
-      setUploadStatus('error');
-      alert(t('upload_error'));
+      setUploadStatus('error'); // إيقاف التحميل وإظهار الخطأ
+      const errorMsg = error.response?.data?.detail || "حدث خطأ أثناء الرفع";
+      alert("تنبيه من الذكاء الاصطناعي ⚠️\n\n" + errorMsg);
     }
   };
 
